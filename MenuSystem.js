@@ -26,9 +26,13 @@ function onOpen() {
 
     // ===== ARREST SCRAPER =====
     .addSubMenu(ui.createMenu('🚔 Arrest Scraper')
-      .addItem('▶️ Run AJAX Scraper (WORKING!)', 'scrapeArrestsFromAJAX')
-      .addItem('📊 View Arrest Stats', 'viewArrestStats')
+      .addItem('▶️ Run Lee County Scraper', 'runLeeArrestsNow')
+      .addItem('🔄 Backfill Existing Records', 'backfillExistingRecords')
       .addSeparator()
+      .addItem('📋 Open Bond Form (Selected Row)', 'openBondFormForSelectedRow')
+      .addItem('📊 Score All Leads', 'scoreAllLeads')
+      .addSeparator()
+      .addItem('📊 View Arrest Stats', 'viewArrestStats')
       .addItem('🔧 Setup Arrest Sheet', 'getOrCreateArrestSheet')
       .addItem('⏰ Install Scraper Trigger', 'installArrestScraperTrigger')
       .addItem('🗑️ Remove Scraper Trigger', 'removeArrestScraperTrigger'))

@@ -32,6 +32,10 @@ function onOpen() {
       .addItem('📋 Open Bond Form (Selected Row)', 'openBondFormForSelectedRow')
       .addItem('📊 Score All Leads', 'scoreAllLeads')
       .addSeparator()
+      .addItem('🔍 Generate Search Links (All Rows)', 'generateAllSearchLinks')
+      .addItem('🔍 Generate Search Links (Selected Row)', 'generateSearchLinksForSelectedRow')
+      .addItem('🌐 Open All Search Links (Selected Row)', 'openAllSearchLinks')
+      .addSeparator()
       .addItem('📊 View Arrest Stats', 'viewArrestStats')
       .addItem('🔧 Setup Arrest Sheet', 'getOrCreateArrestSheet')
       .addItem('⏰ Install Scraper Trigger', 'installArrestScraperTrigger')
@@ -39,13 +43,22 @@ function onOpen() {
 
 
 
+    // ===== SIGNNOW & SLACK =====
+    .addSubMenu(ui.createMenu('📨 SignNow & Slack')
+      .addItem('🔧 Configure SignNow', 'configureSignNow')
+      .addItem('🧪 Test SignNow Connection', 'testSignNowConnection')
+      .addSeparator()
+      .addItem('🔧 Configure Slack Webhook', 'configureSlackWebhook')
+      .addItem('📊 Send Test Slack Message', 'testSlackNotification')
+      .addSeparator()
+      .addItem('🚀 Route New Leads to Slack', 'routeLeeArrestLeadsNow'))
+    
     // ===== SYSTEM MANAGEMENT =====
     .addSubMenu(ui.createMenu('⚙️ System Management')
       .addItem('🔧 Install Automation Triggers', 'installAllTriggers')
       .addItem('📋 List Active Triggers', 'listAllTriggers')
       .addItem('🗑️ Remove All Triggers', 'removeAllTriggers')
       .addSeparator()
-      .addItem('📊 Send Test Slack Message', 'testSlackNotification')
       .addItem('🔍 Check Configuration', 'checkConfiguration'))
     
     // ===== HELP & INFO =====

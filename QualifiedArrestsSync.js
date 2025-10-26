@@ -87,6 +87,7 @@ function getOrCreateQualifiedArrestsSheet() {
     // Set up headers
     var headers = [
       'Sync_Date',
+      'Person_ID',
       'Booking_Number',
       'Full_Name',
       'First_Name',
@@ -98,11 +99,14 @@ function getOrCreateQualifiedArrestsSheet() {
       'ZIP',
       'Booking_Date',
       'Status',
-      'Charges',
+      'All_Charges',
       'Bond_Amount',
       'Bond_Type',
+      'Bond_Paid',
+      'Case_Numbers',
       'Court_Date',
       'Court_Time',
+      'Court_Location',
       'Lead_Score',
       'Lead_Status',
       'Detail_URL',
@@ -170,6 +174,7 @@ function getQualifiedArrests(sourceSheet) {
     
     if (!isNaN(score) && score >= CONFIG.QUALIFIED_ARRESTS.MIN_SCORE) {
       var arrest = {
+        Person_ID: row[colMap['Person_ID']] || '',
         Booking_Number: row[colMap['Booking_Number']] || '',
         Full_Name: row[colMap['Full_Name']] || '',
         First_Name: row[colMap['First_Name']] || '',
@@ -184,8 +189,11 @@ function getQualifiedArrests(sourceSheet) {
         Charges: row[colMap['Charges']] || '',
         Bond_Amount: row[colMap['Bond_Amount']] || '',
         Bond_Type: row[colMap['Bond_Type']] || '',
+        Bond_Paid: row[colMap['Bond_Paid']] || '',
+        Case_Number: row[colMap['Case_Number']] || '',
         Court_Date: row[colMap['Court_Date']] || '',
         Court_Time: row[colMap['Court_Time']] || '',
+        Court_Location: row[colMap['Court_Location']] || '',
         Lead_Score: score,
         Lead_Status: row[colMap['Lead_Status']] || '',
         Detail_URL: row[colMap['Detail_URL']] || '',
@@ -230,7 +238,8 @@ function addQualifiedArrestsToSheet(sheet, arrests) {
   var rows = arrests.map(function(arrest) {
     return [
       new Date(),                    // Sync_Date
-      arrest.Booking_Number,
+      arrest.Person_ID,              // Person_ID
+      arrest.Booking_Number,         // Booking_Number
       arrest.Full_Name,
       arrest.First_Name,
       arrest.Last_Name,
@@ -241,11 +250,14 @@ function addQualifiedArrestsToSheet(sheet, arrests) {
       arrest.ZIP,
       arrest.Booking_Date,
       arrest.Status,
-      arrest.Charges,
+      arrest.Charges,                // All_Charges (pipe-separated)
       arrest.Bond_Amount,
       arrest.Bond_Type,
+      arrest.Bond_Paid,
+      arrest.Case_Number,            // Case_Numbers (comma-separated)
       arrest.Court_Date,
       arrest.Court_Time,
+      arrest.Court_Location,
       arrest.Lead_Score,
       arrest.Lead_Status,
       arrest.Detail_URL,

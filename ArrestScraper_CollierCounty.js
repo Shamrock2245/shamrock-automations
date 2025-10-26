@@ -11,7 +11,7 @@
 function getCollierConfig_() {
   var base = {
     SHEET_ID: '1jq1-N7sCbwSiYPLAdI2ZnxhLzym1QsOSuHPy-Gw07Qc',
-    TAB_NAME: 'Collier_County_Arrests',
+    TAB_NAME: 'collier_county_arressts',
     QUALIFIED_SHEET_ID: '1_8jmb3UsbDNWoEtD2_5O27JNvXKBExrQq2pG0W-mPJI',
     QUALIFIED_TAB: 'Collier County Qualified Arrests',
     TIMEZONE: 'America/New_York',

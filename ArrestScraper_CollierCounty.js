@@ -300,8 +300,8 @@ function parseCollierArrestBlock_(block) {
   }
   
   // Extract Description (physical details)
-  var a#Match = /A#.*?(\d{8})/i.exec(block);
-  if (a#Match) arrest.Person_ID = a#Match[1];
+  var aNumMatch = /A#.*?(\d{8})/i.exec(block);
+  if (aNumMatch) arrest.Person_ID = aNumMatch[1];
   
   var pinMatch = /PIN.*?(\d{9,10})/i.exec(block);
   if (pinMatch) arrest.PIN = pinMatch[1];

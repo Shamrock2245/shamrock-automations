@@ -200,7 +200,7 @@ function fetchWithCloudflareBypass_(url) {
   
   // METHOD 2: Try with stored cookies (from manual browser session)
   try {
-    var cookies = getStoredCloudfl areCookies_();
+    var cookies = getStoredCloudflareCookies_();
     if (cookies) {
       var response = UrlFetchApp.fetch(url, {
         method: 'get',

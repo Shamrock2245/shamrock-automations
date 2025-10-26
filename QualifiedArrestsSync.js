@@ -15,11 +15,34 @@ function syncQualifiedArrests() {
     return;
   }
   
-  Logger.log('🎯 Starting qualified arrests sync...');
+  Logger.log('🎯 Starting qualified arrests sync for all counties...');
   
   try {
-    // Get source sheet (Lee County Arrests)
-    var sourceSheet = SpreadsheetApp.openById(CONFIG.ARRESTS.SHEET_ID).getSheetByName(CONFIG.ARRESTS.TAB_NAME);
+    // Sync Lee County
+    syncCountyQualifiedArrests('Lee', CONFIG.ARRESTS.SHEET_ID, CONFIG.ARRESTS.TAB_NAME);
+    
+    // Sync Collier County if configured
+    if (CONFIG.COLLIER && CONFIG.COLLIER.SHEET_ID && CONFIG.COLLIER.TAB_NAME) {
+      syncCountyQualifiedArrests('Collier', CONFIG.COLLIER.SHEET_ID, CONFIG.COLLIER.TAB_NAME);
+    }
+    
+    Logger.log('✅ All counties synced');
+    
+  } catch (error) {
+    Logger.log('❌ Error syncing qualified arrests: ' + error.message);
+    throw error;
+  }
+}
+
+/**
+ * Sync qualified arrests for a specific county
+ */
+function syncCountyQualifiedArrests(countyName, sheetId, tabName) {
+  Logger.log('🎯 Syncing ' + countyName + ' County qualified arrests...');
+  
+  try {
+    // Get source sheet
+    var sourceSheet = SpreadsheetApp.openById(sheetId).getSheetByName(tabName);
     if (!sourceSheet) {
       throw new Error('Source sheet not found: ' + CONFIG.ARRESTS.TAB_NAME);
     }
@@ -39,9 +62,10 @@ function syncQualifiedArrests() {
     // Get existing booking numbers in qualified sheet
     var existingBookings = getExistingBookingNumbers(destSheet);
     
-    // Filter out arrests that are already in qualified sheet
+    // Filter out arrests that are already in qualified sheet (by county + booking number)
     var newQualified = qualifiedArrests.filter(function(arrest) {
-      return !existingBookings.has(arrest.Booking_Number);
+      var key = countyName + '-' + arrest.Booking_Number;
+      return !existingBookings.has(key);
     });
     
     Logger.log('📥 New qualified arrests to sync: ' + newQualified.length);
@@ -52,7 +76,7 @@ function syncQualifiedArrests() {
     }
     
     // Add new qualified arrests to destination sheet
-    addQualifiedArrestsToSheet(destSheet, newQualified);
+    addQualifiedArrestsToSheet(destSheet, newQualified, countyName);
     
     // Perform family search if enabled
     if (CONFIG.QUALIFIED_ARRESTS.FAMILY_SEARCH.ENABLED) {
@@ -65,7 +89,7 @@ function syncQualifiedArrests() {
       notifySlackOfQualifiedArrests(newQualified);
     }
     
-    Logger.log('✅ Qualified arrests sync complete');
+    Logger.log('✅ ' + countyName + ' County sync complete');
     
   } catch (error) {
     Logger.log('❌ Error syncing qualified arrests: ' + error.message);
@@ -87,6 +111,7 @@ function getOrCreateQualifiedArrestsSheet() {
     // Set up headers
     var headers = [
       'Sync_Date',
+      'County',
       'Person_ID',
       'Booking_Number',
       'Full_Name',
@@ -217,14 +242,18 @@ function getExistingBookingNumbers(sheet) {
   if (data.length < 2) return bookingNumbers;
   
   var headers = data[0];
+  var countyCol = headers.indexOf('County');
   var bookingCol = headers.indexOf('Booking_Number');
   
   if (bookingCol === -1) return bookingNumbers;
   
   for (var i = 1; i < data.length; i++) {
+    var county = countyCol !== -1 ? data[i][countyCol] : 'Lee';
     var bookingNum = data[i][bookingCol];
     if (bookingNum) {
-      bookingNumbers.add(String(bookingNum).trim());
+      // Use County-BookingNumber as key for deduplication
+      var key = String(county).trim() + '-' + String(bookingNum).trim();
+      bookingNumbers.add(key);
     }
   }
   
@@ -234,10 +263,11 @@ function getExistingBookingNumbers(sheet) {
 /**
  * Add qualified arrests to the qualified sheet
  */
-function addQualifiedArrestsToSheet(sheet, arrests) {
+function addQualifiedArrestsToSheet(sheet, arrests, countyName) {
   var rows = arrests.map(function(arrest) {
     return [
       new Date(),                    // Sync_Date
+      countyName || 'Lee',           // County
       arrest.Person_ID,              // Person_ID
       arrest.Booking_Number,         // Booking_Number
       arrest.Full_Name,

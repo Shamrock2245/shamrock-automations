@@ -234,7 +234,7 @@ function getStoredCloudflareCookies_() {
   }
 }
 
-function setCloudflare Cookies(cookieString) {
+function setCloudflareCookies(cookieString) {
   // Store Cloudflare cookies for future requests
   // Call this manually after getting cookies from browser
   var props = PropertiesService.getScriptProperties();

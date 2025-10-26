@@ -27,6 +27,7 @@ function onOpen() {
     // ===== ARREST SCRAPER =====
     .addSubMenu(ui.createMenu('🚔 Arrest Scraper')
       .addItem('▶️ Run Lee County Scraper', 'runLeeArrestsNow')
+      .addItem('▶️ Run Collier County Scraper', 'runCollierArrestsNow')
       .addItem('🔄 Backfill Existing Records', 'backfillExistingRecords')
       .addSeparator()
       .addItem('📋 Open Bond Form (Selected Row)', 'openBondFormForSelectedRow')

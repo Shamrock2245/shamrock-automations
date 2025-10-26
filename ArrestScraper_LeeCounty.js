@@ -9,7 +9,7 @@
  */
 
 // ========== CONFIG ==========
-function getConfig_(){var base={SHEET_ID:'1jq1-N7sCbwSiYPLAdI2ZnxhLzym1QsOSuHPy-Gw07Qc',TAB_NAME:'Lee_County_Arrests',TIMEZONE:'America/New_York',ENDPOINTS:{BASE:'https://www.sheriffleefl.org',PUBLIC_API:'/public-api/bookings',CHARGES_API:'/public-api/bookings/{id}/charges',DETAIL_PAGE:'/booking/'},DAYS_BACK:7,PAGE_SIZE:200,MAX_PAGES:50,MAX_ENRICH:100,MAX_BACKFILL:200,DETAIL_DELAY_MS:400,RETRY_LIMIT:4,BACKOFF_BASE_MS:400,MAX_EXECUTION_MS:330000,MAX_CELL_LEN:49000,BACKFILL_MODE:true};try{if(typeof CONFIG!=='undefined'&&CONFIG&&CONFIG.ARRESTS){var o=CONFIG.ARRESTS;for(var k in o)base[k]=o[k];if(o.ENDPOINTS)base.ENDPOINTS=o.ENDPOINTS}}catch(_){ }return base}
+function getConfig_(){var base={SHEET_ID:'1jq1-N7sCbwSiYPLAdI2ZnxhLzym1QsOSuHPy-Gw07Qc',TAB_NAME:'Lee_County_Arrests',TIMEZONE:'America/New_York',ENDPOINTS:{BASE:'https://www.sheriffleefl.org',PUBLIC_API:'/public-api/bookings',CHARGES_API:'/public-api/bookings/{id}/charges',DETAIL_PAGE:'/booking/'},DAYS_BACK:26,PAGE_SIZE:200,MAX_PAGES:50,MAX_ENRICH:100,MAX_BACKFILL:200,DETAIL_DELAY_MS:400,RETRY_LIMIT:4,BACKOFF_BASE_MS:400,MAX_EXECUTION_MS:330000,MAX_CELL_LEN:49000,BACKFILL_MODE:true};try{if(typeof CONFIG!=='undefined'&&CONFIG&&CONFIG.ARRESTS){var o=CONFIG.ARRESTS;for(var k in o)base[k]=o[k];if(o.ENDPOINTS)base.ENDPOINTS=o.ENDPOINTS}}catch(_){ }return base}
 var LEE=getConfig_();
 
 // ========== MENU & TRIGGERS ==========

@@ -712,25 +712,21 @@
         let charges = [];
         let chargeCounter = 0;
         
-        // Initialize
-        // Injected data from server
-        <? if (typeof bookingNumber !== 'undefined' && bookingNumber) { ?>
-        const BOOKING_NUMBER = '<?= bookingNumber ?>';
-        const ROW_INDEX = <?= rowIndex ?>;
-        <? } else { ?>
-        const BOOKING_NUMBER = null;
-        const ROW_INDEX = null;
-        <? } ?>
-        
+        // Initialize - get data from injected script
         window.onload = function() {
-            console.log('Injected data:', { BOOKING_NUMBER, ROW_INDEX });
+            // Check for injected form data
+            const bookingNumber = window.FORM_DATA ? window.FORM_DATA.booking : null;
+            const rowIndex = window.FORM_DATA ? window.FORM_DATA.row : null;
             
-            if (BOOKING_NUMBER && ROW_INDEX) {
+            console.log('Form data:', { bookingNumber, rowIndex });
+            
+            if (bookingNumber && rowIndex) {
                 // Load arrest data from spreadsheet
                 document.getElementById('autoFillBadge').style.display = 'inline-flex';
-                loadArrestData(BOOKING_NUMBER, ROW_INDEX);
+                loadArrestData(bookingNumber, parseInt(rowIndex));
             } else {
                 // No arrest data, start with blank form
+                console.log('No URL parameters found, starting with blank form');
                 addCharge();
             }
         };

@@ -30,15 +30,14 @@ function openBondFormForSelectedRow() {
   
   Logger.log('Opening bond form for booking number: ' + bookingNumber + ' (row ' + selectedRow + ')');
   
-  // Create HTML and inject data via script
+  // Create HTML with URL parameters
   var template = HtmlService.createTemplateFromFile('Form');
-  template.bookingNumber = String(bookingNumber);
-  template.rowIndex = Number(selectedRow);
   
   var htmlOutput = template.evaluate()
     .setWidth(1200)
     .setHeight(900)
-    .setTitle('Shamrock Bail Bonds - Bond Application Form');
+    .setTitle('Shamrock Bail Bonds - Bond Application Form')
+    .append('<script>window.FORM_DATA = {booking: "' + bookingNumber + '", row: ' + selectedRow + '};</script>');
   
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Bond Application Form');
 }

@@ -1,18 +1,17 @@
 /**
  * ============================================
- * COLLIER COUNTY ARREST SCRAPER v2.0
+ * COLLIER COUNTY ARREST SCRAPER v3.0
  * ============================================
- * Handles ASP.NET WebForms with ViewState
- * Auto-scraping, backfill, scoring, qualified arrests sync
+ * Simplified: Just parse the default results page
+ * (Page loads with yesterday's arrests by default)
  */
 
 // Configuration
 var COLLIER_CONFIG = {
-  SPREADSHEET_ID: '1jq1-N7sCbwSiYPLAdI2ZnxhLzym1QsOSuHPy-Gw07Qc', // Same as Lee County
+  SPREADSHEET_ID: '1jq1-N7sCbwSiYPLAdI2ZnxhLzym1QsOSuHPy-Gw07Qc',
   TAB_NAME: 'Collier_County_Arrests',
   QUALIFIED_SHEET_ID: '1_8jmb3UsbDNWoEtD2_5O27JNvXKBExrQq2pG0W-mPJI',
   QUALIFIED_TAB_NAME: 'Qualified_Arrests',
-  DAYS_BACK: 3, // How many days to look back
   BASE_URL: 'https://www2.colliersheriff.org/arrestsearch/Report.aspx',
   COUNTY: 'Collier'
 };
@@ -23,7 +22,7 @@ var COLLIER_CONFIG = {
 function runCollierArrestsNow() {
   var startTime = new Date();
   Logger.log('═══════════════════════════════════════');
-  Logger.log('🚦 Starting Collier County Arrest Scraper v2.0');
+  Logger.log('🚦 Starting Collier County Arrest Scraper v3.0');
   Logger.log('═══════════════════════════════════════');
   
   try {
@@ -40,17 +39,9 @@ function runCollierArrestsNow() {
     
     Logger.log('📚 Existing rows: ' + (existingData.length - 1));
     
-    // Calculate date range
-    var today = new Date();
-    var startDate = new Date(today.getTime() - (COLLIER_CONFIG.DAYS_BACK * 24 * 60 * 60 * 1000));
-    var dateFrom = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'MM/dd/yyyy');
-    var dateTo = Utilities.formatDate(today, Session.getScriptTimeZone(), 'MM/dd/yyyy');
-    
-    Logger.log('📅 Date range: ' + dateFrom + ' to ' + dateTo);
-    
-    // Fetch arrests
+    // Fetch arrests from default page
     Logger.log('📡 Fetching Collier County arrests...');
-    var arrests = fetchCollierArrests_(dateFrom, dateTo);
+    var arrests = fetchCollierArrests_();
     
     Logger.log('✅ Parsed ' + arrests.length + ' arrest records');
     
@@ -99,54 +90,29 @@ function runCollierArrestsNow() {
 
 /**
  * Fetch arrests from Collier County website
- * Handles ASP.NET WebForms ViewState
+ * Just GET the default page (shows yesterday's arrests)
  */
-function fetchCollierArrests_(dateFrom, dateTo) {
+function fetchCollierArrests_() {
   try {
-    // STEP 1: Get the initial page to extract ViewState
-    var initialResponse = UrlFetchApp.fetch(COLLIER_CONFIG.BASE_URL, {
-      method: 'get',
-      muteHttpExceptions: true
-    });
+    Logger.log('📡 Loading: ' + COLLIER_CONFIG.BASE_URL);
     
-    var initialHtml = initialResponse.getContentText();
-    
-    // Extract ViewState fields
-    var viewState = extractValue_(initialHtml, '__VIEWSTATE');
-    var viewStateGenerator = extractValue_(initialHtml, '__VIEWSTATEGENERATOR');
-    var eventValidation = extractValue_(initialHtml, '__EVENTVALIDATION');
-    
-    Logger.log('🔑 ViewState extracted: ' + (viewState ? 'Yes' : 'No'));
-    
-    // STEP 2: Build POST request with form data
-    var formData = {
-      '__VIEWSTATE': viewState || '',
-      '__VIEWSTATEGENERATOR': viewStateGenerator || '',
-      '__EVENTVALIDATION': eventValidation || '',
-      'ctl00$ContentPlaceHolder1$txtDateFrom': dateFrom,
-      'ctl00$ContentPlaceHolder1$txtDateTo': dateTo,
-      'ctl00$ContentPlaceHolder1$btnSearch': 'Search'
-    };
-    
-    // Convert to URL-encoded string
-    var payload = Object.keys(formData).map(function(key) {
-      return encodeURIComponent(key) + '=' + encodeURIComponent(formData[key]);
-    }).join('&');
-    
-    // STEP 3: POST the form
     var response = UrlFetchApp.fetch(COLLIER_CONFIG.BASE_URL, {
-      method: 'post',
-      payload: payload,
+      method: 'get',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
       },
       muteHttpExceptions: true
     });
     
-    var html = response.getContentText();
+    if (response.getResponseCode() !== 200) {
+      Logger.log('⚠️ HTTP ' + response.getResponseCode());
+      return [];
+    }
     
-    // STEP 4: Parse the results
+    var html = response.getContentText();
+    Logger.log('📄 HTML received: ' + html.length + ' bytes');
+    
+    // Parse the results
     return parseCollierHTML_(html);
     
   } catch (error) {
@@ -156,36 +122,34 @@ function fetchCollierArrests_(dateFrom, dateTo) {
 }
 
 /**
- * Extract value from hidden input field
- */
-function extractValue_(html, fieldName) {
-  var regex = new RegExp('id="' + fieldName + '"[^>]*value="([^"]*)"', 'i');
-  var match = regex.exec(html);
-  return match ? match[1] : null;
-}
-
-/**
  * Parse Collier County HTML to extract arrest records
  */
 function parseCollierHTML_(html) {
   var arrests = [];
   
   try {
-    // Split by arrest record blocks (each starts with Name table)
-    var blocks = html.split(/<table[^>]*>\s*<tr[^>]*>\s*<td[^>]*>Name<\/td>/gi);
+    // The page structure: Each arrest is in a block starting with a Name table
+    // Pattern: <td>Name</td> ... <td>LASTNAME,FIRSTNAME</td> <td>DOB</td> <td>Residence</td>
     
-    Logger.log('🔍 Found ' + (blocks.length - 1) + ' potential arrest blocks');
+    // Split by "Name\tDate of Birth\tResidence" header rows
+    var nameHeaderRegex = /<td[^>]*>Name<\/td>\s*<td[^>]*>Date of Birth<\/td>\s*<td[^>]*>Residence<\/td>/gi;
+    var blocks = html.split(nameHeaderRegex);
     
+    Logger.log('🔍 Found ' + (blocks.length - 1) + ' arrest blocks');
+    
+    // Skip first block (before first arrest)
     for (var i = 1; i < blocks.length; i++) {
       var block = blocks[i];
       var arrest = parseCollierBlock_(block);
       if (arrest && arrest.Booking_Number) {
         arrests.push(arrest);
+        Logger.log('✅ Parsed: ' + arrest.Full_Name + ' (' + arrest.Booking_Number + ')');
       }
     }
     
   } catch (error) {
     Logger.log('⚠️ Error parsing HTML: ' + error.message);
+    Logger.log(error.stack);
   }
   
   return arrests;
@@ -228,122 +192,150 @@ function parseCollierBlock_(block) {
     Agency: ''
   };
   
-  // Extract name, DOB, residence (first row of first table)
-  var nameMatch = /<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>(\d{2}\/\d{2}\/\d{4})<\/td>\s*<td[^>]*>([^<]+)<\/td>/i.exec(block);
-  if (nameMatch) {
-    arrest.Full_Name = cleanText_(nameMatch[1]);
-    arrest.DOB = cleanText_(nameMatch[2]);
-    var residence = cleanText_(nameMatch[3]);
-    parseCollierResidence_(residence, arrest);
-    parseCollierName_(arrest.Full_Name, arrest);
-  }
-  
-  // Extract Person ID (A#)
-  var aNumMatch = /A#[^\d]*(\d{8})/i.exec(block);
-  if (aNumMatch) arrest.Person_ID = aNumMatch[1];
-  
-  // Extract PIN
-  var pinMatch = /PIN[^\d]*(\d{9,10})/i.exec(block);
-  if (pinMatch) arrest.PIN = pinMatch[1];
-  
-  // Extract physical description
-  var raceMatch = /Race<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (raceMatch) arrest.Race = cleanText_(raceMatch[1]);
-  
-  var sexMatch = /Sex<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (sexMatch) arrest.Sex = cleanText_(sexMatch[1]);
-  
-  var heightMatch = /Height<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (heightMatch) arrest.Height = cleanText_(heightMatch[1]);
-  
-  var weightMatch = /Weight<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (weightMatch) arrest.Weight = cleanText_(weightMatch[1]);
-  
-  var hairMatch = /Hair Color<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (hairMatch) arrest.Hair_Color = cleanText_(hairMatch[1]);
-  
-  var eyeMatch = /Eye Color<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (eyeMatch) arrest.Eye_Color = cleanText_(eyeMatch[1]);
-  
-  // Extract booking info
-  var bookingDateMatch = /Booking Date<\/td>\s*<td[^>]*>(\d{2}\/\d{2}\/\d{4})</i.exec(block);
-  if (bookingDateMatch) arrest.Booking_Date = bookingDateMatch[1];
-  
-  var bookingNumMatch = /Booking Number<\/td>\s*<td[^>]*>(\d+)</i.exec(block);
-  if (bookingNumMatch) arrest.Booking_Number = bookingNumMatch[1];
-  
-  var agencyMatch = /Agency<\/td>\s*<td[^>]*>([^<]+)</i.exec(block);
-  if (agencyMatch) arrest.Agency = cleanText_(agencyMatch[1]);
-  
-  var ageMatch = /Age at Arrest<\/td>\s*<td[^>]*>(\d+)</i.exec(block);
-  if (ageMatch) arrest.Age = ageMatch[1];
-  
-  // Extract charges (multiple rows in Charged table)
-  var charges = [];
-  var chargeRegex = /<tr[^>]*>\s*<td[^>]*>(\d{2}\/\d{2}\/\d{4})<\/td>\s*<td[^>]*>(\d+)<\/td>\s*<td[^>]*>([^<]+)<\/td>/gi;
-  var chargeMatch;
-  while ((chargeMatch = chargeRegex.exec(block)) !== null) {
-    charges.push(cleanText_(chargeMatch[3]));
-  }
-  arrest.Charges = charges.join(' | ');
-  
-  // Extract court date
-  var courtDateMatch = /Court Date<\/th>\s*<\/tr>\s*<tr[^>]*>.*?<td[^>]*>(\d{2}\/\d{2}\/\d{4})</is.exec(block);
-  if (courtDateMatch) arrest.Court_Date = courtDateMatch[1];
-  
-  // Extract bond status
-  var bondMatch = /(\d{2}\/\d{2}\/\d{4})\s+(BONDED|RELEASED|IN CUSTODY)/i.exec(block);
-  if (bondMatch) {
-    arrest.Bond_Paid = bondMatch[2];
-    arrest.Status = bondMatch[2];
-  }
-  
-  // Determine if in custody
-  if (block.indexOf('IN CUSTODY') > -1) {
-    arrest.Status = 'In Custody';
-  } else if (block.indexOf('BONDED') > -1) {
-    arrest.Status = 'Released';
-    arrest.Bond_Paid = 'Yes';
+  try {
+    // Extract name, DOB, residence from first data row
+    // Pattern: <td>LASTNAME,FIRSTNAME MIDDLE</td><td>MM/DD/YYYY</td><td>CITY, STATE ZIP</td>
+    var firstRowRegex = /<tr[^>]*>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>(\d{2}\/\d{2}\/\d{4})<\/td>\s*<td[^>]*>([^<]*)<\/td>/i;
+    var firstRowMatch = firstRowRegex.exec(block);
+    
+    if (firstRowMatch) {
+      arrest.Full_Name = cleanText_(firstRowMatch[1]);
+      arrest.DOB = cleanText_(firstRowMatch[2]);
+      var residence = cleanText_(firstRowMatch[3]);
+      
+      // Parse name (format: "LASTNAME,FIRSTNAME MIDDLE")
+      parseCollierName_(arrest.Full_Name, arrest);
+      
+      // Parse residence (format: "CITY, STATE ZIP")
+      parseCollierResidence_(residence, arrest);
+    }
+    
+    // Extract Person ID (A#)
+    var aNumMatch = /A#[^\d]*(\d{8})/i.exec(block);
+    if (aNumMatch) arrest.Person_ID = aNumMatch[1];
+    
+    // Extract PIN
+    var pinMatch = /PIN[^\d]*(\d{9,10})/i.exec(block);
+    if (pinMatch) arrest.PIN = pinMatch[1];
+    
+    // Extract Race
+    var raceMatch = /Race<\/td>\s*<td[^>]*>([^<]+)/i.exec(block);
+    if (raceMatch) arrest.Race = cleanText_(raceMatch[1]);
+    
+    // Extract Sex
+    var sexMatch = /Sex<\/td>\s*<td[^>]*>([^<]+)/i.exec(block);
+    if (sexMatch) arrest.Sex = cleanText_(sexMatch[1]);
+    
+    // Extract Height
+    var heightMatch = /Height<\/td>\s*<td[^>]*>(\d+)/i.exec(block);
+    if (heightMatch) arrest.Height = cleanText_(heightMatch[1]);
+    
+    // Extract Weight
+    var weightMatch = /Weight<\/td>\s*<td[^>]*>(\d+)/i.exec(block);
+    if (weightMatch) arrest.Weight = cleanText_(weightMatch[1]);
+    
+    // Extract Hair Color
+    var hairMatch = /Hair Color<\/td>\s*<td[^>]*>([^<]+)/i.exec(block);
+    if (hairMatch) arrest.Hair_Color = cleanText_(hairMatch[1]);
+    
+    // Extract Eye Color
+    var eyeMatch = /Eye Color<\/td>\s*<td[^>]*>([^<]+)/i.exec(block);
+    if (eyeMatch) arrest.Eye_Color = cleanText_(eyeMatch[1]);
+    
+    // Extract Booking Date, Number, Agency, Age
+    var bookingMatch = /Booking Date<\/td>\s*<td[^>]*>(\d{2}\/\d{2}\/\d{4})<\/td>\s*<td[^>]*>Booking Number<\/td>\s*<td[^>]*>(\d+)<\/td>\s*<td[^>]*>Agency<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>Age at Arrest<\/td>\s*<td[^>]*>(\d+)/i.exec(block);
+    if (bookingMatch) {
+      arrest.Booking_Date = cleanText_(bookingMatch[1]);
+      arrest.Booking_Number = cleanText_(bookingMatch[2]);
+      arrest.Agency = cleanText_(bookingMatch[3]);
+      arrest.Age = cleanText_(bookingMatch[4]);
+    }
+    
+    // Extract charges (multiple rows in Charged table)
+    var chargesArray = [];
+    var caseNumbers = [];
+    var courtDates = [];
+    
+    // Pattern: <td>MM/DD/YYYY</td><td>Count</td><td>Offense description</td><td>Hold For</td><td>Case Number</td><td>Court Date</td>
+    var chargeRegex = /<td[^>]*>(\d{2}\/\d{2}\/\d{4})<\/td>\s*<td[^>]*>(\d+|[^<]*)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>/gi;
+    var chargeMatch;
+    
+    while ((chargeMatch = chargeRegex.exec(block)) !== null) {
+      var chargeDate = cleanText_(chargeMatch[1]);
+      var offense = cleanText_(chargeMatch[3]);
+      var caseNum = cleanText_(chargeMatch[5]);
+      var courtDate = cleanText_(chargeMatch[6]);
+      
+      if (offense && offense.length > 3) {
+        chargesArray.push(offense);
+        if (caseNum) caseNumbers.push(caseNum);
+        if (courtDate) courtDates.push(courtDate);
+      }
+    }
+    
+    arrest.Charges = chargesArray.join(' | ');
+    arrest.Case_Number = caseNumbers.join(', ');
+    arrest.Court_Date = courtDates.length > 0 ? courtDates[0] : '';
+    
+    // Extract bond status
+    var bondMatch = /Bond Status<\/td>[\s\S]*?<td[^>]*>([^<]+)</i.exec(block);
+    if (bondMatch) {
+      var bondText = cleanText_(bondMatch[1]);
+      arrest.Bond_Paid = bondText;
+      
+      // Parse bond amount if present
+      var amountMatch = /\$?([\d,]+)/i.exec(bondText);
+      if (amountMatch) {
+        arrest.Bond_Amount = amountMatch[1].replace(/,/g, '');
+      }
+    }
+    
+    // Extract custody status
+    var custodyMatch = /IN CUSTODY/i.exec(block);
+    arrest.Status = custodyMatch ? 'In Custody' : 'Released';
+    
+  } catch (error) {
+    Logger.log('⚠️ Error parsing block: ' + error.message);
   }
   
   return arrest;
 }
 
 /**
- * Parse residence into address, city, state, ZIP
- */
-function parseCollierResidence_(residence, arrest) {
-  if (!residence) return;
-  
-  // Format: "FORT MYERS, FL 33967" or "NAPLES, FL 34120"
-  var parts = residence.split(',');
-  if (parts.length >= 2) {
-    arrest.City = cleanText_(parts[0]);
-    var stateZip = cleanText_(parts[1]);
-    var stateZipMatch = /([A-Z]{2})\s*(\d{5})/i.exec(stateZip);
-    if (stateZipMatch) {
-      arrest.State = stateZipMatch[1];
-      arrest.ZIP = stateZipMatch[2];
-    }
-  }
-}
-
-/**
- * Parse full name into first/last
+ * Parse name (format: "LASTNAME,FIRSTNAME MIDDLE")
  */
 function parseCollierName_(fullName, arrest) {
   if (!fullName) return;
   
-  // Format: "CORNELL, SARA" or "MCKSYMICK, JOSEY WALES"
   var parts = fullName.split(',');
   if (parts.length >= 2) {
-    arrest.Last_Name = titleCase_(parts[0].trim());
-    arrest.First_Name = titleCase_(parts[1].trim());
+    arrest.Last_Name = parts[0].trim();
+    var firstMiddle = parts[1].trim().split(/\s+/);
+    arrest.First_Name = firstMiddle[0];
+  } else {
+    arrest.Last_Name = fullName.trim();
   }
 }
 
 /**
- * Clean text (trim, remove extra spaces)
+ * Parse residence (format: "CITY, STATE ZIP")
+ */
+function parseCollierResidence_(residence, arrest) {
+  if (!residence) return;
+  
+  arrest.Address = residence;
+  
+  // Try to extract city, state, ZIP
+  var match = /([^,]+),\s*([A-Z]{2})\s+(\d{5})/i.exec(residence);
+  if (match) {
+    arrest.City = match[1].trim();
+    arrest.State = match[2].trim();
+    arrest.ZIP = match[3].trim();
+  }
+}
+
+/**
+ * Clean text (trim, remove extra whitespace)
  */
 function cleanText_(text) {
   if (!text) return '';
@@ -351,17 +343,7 @@ function cleanText_(text) {
 }
 
 /**
- * Convert to title case
- */
-function titleCase_(str) {
-  if (!str) return '';
-  return str.toLowerCase().replace(/\b\w/g, function(char) {
-    return char.toUpperCase();
-  });
-}
-
-/**
- * Get or create Collier County arrests sheet
+ * Get or create Collier County sheet
  */
 function getOrCreateCollierSheet_() {
   var ss = SpreadsheetApp.openById(COLLIER_CONFIG.SPREADSHEET_ID);
@@ -370,19 +352,18 @@ function getOrCreateCollierSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(COLLIER_CONFIG.TAB_NAME);
     
-    // Add headers
+    // Set up headers
     var headers = [
       'County', 'Booking_Number', 'Booking_Date', 'Full_Name', 'First_Name', 'Last_Name',
       'DOB', 'Age', 'Sex', 'Race', 'Height', 'Weight', 'Hair_Color', 'Eye_Color',
-      'Address', 'City', 'State', 'ZIP', 'Person_ID', 'PIN',
+      'Address', 'City', 'State', 'ZIP', 'Person_ID', 'PIN', 'Agency',
       'Charges', 'Case_Number', 'Court_Date', 'Court_Time', 'Court_Location',
-      'Bond_Amount', 'Bond_Type', 'Bond_Paid', 'Status', 'Agency',
-      'Lead_Score', 'Lead_Status',
-      'Google_Search', 'Facebook_Search', 'TruePeopleSearch'
+      'Bond_Amount', 'Bond_Type', 'Bond_Paid', 'Status',
+      'Lead_Score', 'Lead_Qualification', 'Search_Links', 'Notes'
     ];
     
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#00A86B').setFontColor('white');
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
     
     Logger.log('✅ Created new sheet: ' + COLLIER_CONFIG.TAB_NAME);
@@ -419,6 +400,7 @@ function writeCollierArrestsToSheet_(sheet, arrests) {
       arrest.ZIP,
       arrest.Person_ID,
       arrest.PIN,
+      arrest.Agency,
       arrest.Charges,
       arrest.Case_Number,
       arrest.Court_Date,
@@ -428,27 +410,34 @@ function writeCollierArrestsToSheet_(sheet, arrests) {
       arrest.Bond_Type,
       arrest.Bond_Paid,
       arrest.Status,
-      arrest.Agency,
       '', // Lead_Score (filled by scoring function)
-      '', // Lead_Status
-      '', // Google_Search
-      '', // Facebook_Search
-      ''  // TruePeopleSearch
+      '', // Lead_Qualification
+      '', // Search_Links
+      ''  // Notes
     ];
   });
   
-  var lastRow = sheet.getLastRow();
-  sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
 }
 
 /**
- * Score Collier arrests (same logic as Lee County)
+ * Score arrests using LeadScoring.js
  */
 function scoreCollierArrests_(sheet, arrests) {
-  // Use the same scoring logic from LeadScoring.js
-  if (typeof scoreArrestLead === 'function') {
-    Logger.log('📊 Scoring ' + arrests.length + ' arrests...');
-    // Implementation would call scoreArrestLead for each arrest
+  if (arrests.length === 0) return;
+  
+  try {
+    if (typeof autoScoreNewArrests === 'function') {
+      var startRow = sheet.getLastRow() - arrests.length + 1;
+      var endRow = sheet.getLastRow();
+      Logger.log('📊 Auto-scoring rows ' + startRow + ' to ' + endRow);
+      autoScoreNewArrests(startRow, endRow);
+    } else {
+      Logger.log('⚠️ autoScoreNewArrests function not found');
+    }
+  } catch (error) {
+    Logger.log('⚠️ Error scoring arrests: ' + error.message);
   }
 }
 
@@ -456,17 +445,17 @@ function scoreCollierArrests_(sheet, arrests) {
  * Sync qualified arrests to separate workbook
  */
 function syncCollierQualifiedArrests_(arrests) {
-  // Filter to qualified only (score >= 70)
-  var qualified = arrests.filter(function(arrest) {
-    return arrest.Lead_Score >= 70;
-  });
+  if (arrests.length === 0) return;
   
-  if (qualified.length > 0) {
-    Logger.log('🎯 Syncing ' + qualified.length + ' qualified arrests...');
-    // Use QualifiedArrestsSync.js function
-    if (typeof addQualifiedArrestsToSheet === 'function') {
-      addQualifiedArrestsToSheet(qualified, 'Collier');
+  try {
+    if (typeof syncQualifiedArrests === 'function') {
+      Logger.log('🎯 Syncing qualified arrests...');
+      syncQualifiedArrests();
+    } else {
+      Logger.log('⚠️ syncQualifiedArrests function not found');
     }
+  } catch (error) {
+    Logger.log('⚠️ Error syncing qualified arrests: ' + error.message);
   }
 }
 
@@ -474,43 +463,22 @@ function syncCollierQualifiedArrests_(arrests) {
  * Send Slack notifications for qualified arrests
  */
 function notifyCollierQualifiedArrests_(arrests) {
-  var qualified = arrests.filter(function(arrest) {
-    return arrest.Lead_Score >= 70;
-  });
+  if (arrests.length === 0) return;
   
-  if (qualified.length > 0 && typeof sendSlackNotification === 'function') {
-    Logger.log('📨 Sending Slack notifications for ' + qualified.length + ' qualified arrests...');
-    // Send notification
-  }
-}
-
-/**
- * Install 30-minute trigger for Collier County
- */
-function installCollierScraperTrigger() {
-  // Remove existing triggers first
-  removeCollierScraperTrigger();
-  
-  // Create new trigger
-  ScriptApp.newTrigger('runCollierArrestsNow')
-    .timeBased()
-    .everyMinutes(30)
-    .create();
-  
-  SpreadsheetApp.getUi().alert('✅ Installed 30-minute trigger for Collier County scraper');
-  Logger.log('✅ Installed Collier County scraper trigger');
-}
-
-/**
- * Remove Collier County scraper triggers
- */
-function removeCollierScraperTrigger() {
-  var triggers = ScriptApp.getProjectTriggers();
-  for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'runCollierArrestsNow') {
-      ScriptApp.deleteTrigger(triggers[i]);
+  try {
+    // Filter to qualified arrests (score >= 70)
+    var qualified = arrests.filter(function(arrest) {
+      return arrest.Lead_Score && arrest.Lead_Score >= 70;
+    });
+    
+    if (qualified.length > 0 && typeof sendSlackNotification === 'function') {
+      Logger.log('📢 Sending Slack notifications for ' + qualified.length + ' qualified arrests');
+      qualified.forEach(function(arrest) {
+        sendSlackNotification(arrest);
+      });
     }
+  } catch (error) {
+    Logger.log('⚠️ Error sending Slack notifications: ' + error.message);
   }
-  Logger.log('🗑️ Removed Collier County scraper triggers');
 }
 

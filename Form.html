@@ -718,7 +718,11 @@
             const bookingNumber = '<?= bookingNumber ?>';
             const rowIndex = '<?= rowIndex ?>';
             
-            if (bookingNumber && bookingNumber !== '' && rowIndex && rowIndex !== '') {
+            console.log('Template variables:', { bookingNumber, rowIndex });
+            console.log('bookingNumber type:', typeof bookingNumber);
+            console.log('rowIndex type:', typeof rowIndex);
+            
+            if (bookingNumber && bookingNumber !== '' && bookingNumber !== 'undefined' && rowIndex && rowIndex !== '' && rowIndex !== 'undefined') {
                 // Load arrest data from spreadsheet
                 document.getElementById('autoFillBadge').style.display = 'inline-flex';
                 loadArrestData(bookingNumber, rowIndex);

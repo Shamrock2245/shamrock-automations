@@ -15,16 +15,36 @@ function backfillLeeCountyOctober() {
   // Booking number range for October 1-26, 2025
   // Current (Oct 26): 1013832
   // Estimated Oct 1: 1012707 (25 days * 45 bookings/day)
-  var startBooking = 1012707;
+  
+  // Check if we should resume from where we left off
+  var sheet = getOrCreateTargetSheet_();
+  var existingBookings = loadExistingBookingNumbers_(sheet);
+  
+  // Find the highest booking number we already have
+  var maxExisting = 1012707;
+  existingBookings.forEach(function(booking) {
+    var num = parseInt(booking);
+    if (!isNaN(num) && num > maxExisting) {
+      maxExisting = num;
+    }
+  });
+  
+  var startBooking = Math.max(1012707, maxExisting - 50); // Start 50 before highest to catch gaps
   var endBooking = 1013832;
-  var batchSize = 50; // Process in batches to avoid timeouts
+  var batchSize = 20; // Process in smaller batches to avoid rate limits
+  var maxPerRun = 200; // Only process 200 bookings per run to avoid timeouts
+  
+  // Limit end booking if we'd process too many
+  if (endBooking - startBooking > maxPerRun) {
+    endBooking = startBooking + maxPerRun;
+    Logger.log('⚠️ Limiting to ' + maxPerRun + ' bookings per run to avoid rate limits');
+    Logger.log('⚠️ Run again to continue from booking ' + endBooking);
+  }
   
   Logger.log('📊 Booking range: ' + startBooking + ' to ' + endBooking);
   Logger.log('📊 Total bookings to check: ' + (endBooking - startBooking));
-  
-  var sheet = getOrCreateTargetSheet_();
-  var existingBookings = loadExistingBookingNumbers_(sheet);
   Logger.log('📚 Existing rows in sheet: ' + existingBookings.size);
+  Logger.log('📍 Highest existing booking: ' + maxExisting);
   
   var stats = {
     checked: 0,
@@ -70,8 +90,8 @@ function backfillLeeCountyOctober() {
         }
       }
       
-      // Rate limiting: 100ms delay between requests
-      Utilities.sleep(100);
+      // Rate limiting: 1500ms delay between requests to avoid 503/429
+      Utilities.sleep(1500);
       
     } catch (error) {
       stats.errors++;
@@ -104,25 +124,50 @@ function backfillLeeCountyOctober() {
  */
 function fetchBookingByNumber_(bookingNumber) {
   var url = 'https://www.sheriffleefl.org/public-api/bookings/' + bookingNumber + '/charges';
+  var maxRetries = 3;
+  
+  for (var attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      var response = UrlFetchApp.fetch(url, {
+        muteHttpExceptions: true,
+        headers: {
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+      
+      var code = response.getResponseCode();
+      
+      if (code === 404) {
+        // Booking doesn't exist
+        return null;
+      }
+      
+      if (code === 429 || code === 503) {
+        // Rate limited - wait longer
+        var waitTime = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+        Logger.log('⏳ Rate limited (HTTP ' + code + '), waiting ' + (waitTime/1000) + 's...');
+        Utilities.sleep(waitTime);
+        continue;
+      }
+      
+      if (code !== 200) {
+        Logger.log('⚠️ HTTP ' + code + ' for booking ' + bookingNumber);
+        return null;
+      }
+      
+      // Success - break retry loop
+      break;
+      
+    } catch (error) {
+      if (attempt === maxRetries - 1) {
+        return null;
+      }
+      Utilities.sleep(2000);
+    }
+  }
+    
   
   try {
-    var response = UrlFetchApp.fetch(url, {
-      muteHttpExceptions: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
-    });
-    
-    if (response.getResponseCode() === 404) {
-      // Booking doesn't exist
-      return null;
-    }
-    
-    if (response.getResponseCode() !== 200) {
-      Logger.log('⚠️ HTTP ' + response.getResponseCode() + ' for booking ' + bookingNumber);
-      return null;
-    }
-    
     var json = JSON.parse(response.getContentText());
     
     if (!Array.isArray(json) || json.length === 0) {

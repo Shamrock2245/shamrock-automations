@@ -65,6 +65,8 @@ function backfillLeeCountyOctober() {
         if (newArrests.length >= batchSize) {
           writeBatch_(sheet, newArrests);
           newArrests = [];
+          // Reload existing bookings after writing batch
+          existingBookings = loadExistingBookingNumbers_(sheet);
         }
       }
       
@@ -82,6 +84,7 @@ function backfillLeeCountyOctober() {
   // Write remaining arrests
   if (newArrests.length > 0) {
     writeBatch_(sheet, newArrests);
+    existingBookings = loadExistingBookingNumbers_(sheet);
   }
   
   var duration = Math.round((new Date() - startTime) / 1000);

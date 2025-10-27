@@ -715,8 +715,8 @@
         // Initialize
         window.onload = function() {
             // Check if we have booking data from template
-            const bookingNumber = '<?!= bookingNumber ?>';
-            const rowIndex = <?!= rowIndex ?>;
+            const bookingNumber = '<?= String(bookingNumber || "") ?>';
+            const rowIndex = <?= Number(rowIndex || 0) ?>;
             
             console.log('Template variables:', { bookingNumber, rowIndex });
             console.log('bookingNumber type:', typeof bookingNumber);

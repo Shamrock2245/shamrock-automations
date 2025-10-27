@@ -30,12 +30,12 @@ function openBondFormForSelectedRow() {
   
   Logger.log('Opening bond form for booking number: ' + bookingNumber + ' (row ' + selectedRow + ')');
   
-  // Create HTML template and pass data
-  var html = HtmlService.createTemplateFromFile('Form');
-  html.bookingNumber = bookingNumber;
-  html.rowIndex = selectedRow;
+  // Create HTML and inject data via script
+  var template = HtmlService.createTemplateFromFile('Form');
+  template.bookingNumber = String(bookingNumber);
+  template.rowIndex = Number(selectedRow);
   
-  var htmlOutput = html.evaluate()
+  var htmlOutput = template.evaluate()
     .setWidth(1200)
     .setHeight(900)
     .setTitle('Shamrock Bail Bonds - Bond Application Form');

@@ -29,6 +29,7 @@ function onOpen() {
       .addItem('▶️ Run Lee County Scraper', 'runLeeArrestsNow')
       .addItem('▶️ Run Collier County Scraper', 'runCollierArrestsNow')
       .addItem('🔄 Backfill Existing Records', 'backfillExistingRecords')
+      .addItem('🗓️ Backfill October (Lee County)', 'backfillLeeCountyOctober')
       .addSeparator()
       .addItem('📋 Open Bond Form (Selected Row)', 'openBondFormForSelectedRow')
       .addItem('📊 Score All Leads', 'scoreAllLeads')

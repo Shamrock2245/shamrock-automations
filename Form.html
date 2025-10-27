@@ -713,19 +713,22 @@
         let chargeCounter = 0;
         
         // Initialize
+        // Injected data from server
+        <? if (typeof bookingNumber !== 'undefined' && bookingNumber) { ?>
+        const BOOKING_NUMBER = '<?= bookingNumber ?>';
+        const ROW_INDEX = <?= rowIndex ?>;
+        <? } else { ?>
+        const BOOKING_NUMBER = null;
+        const ROW_INDEX = null;
+        <? } ?>
+        
         window.onload = function() {
-            // Check if we have booking data from template
-            const bookingNumber = '<?= String(bookingNumber || "") ?>';
-            const rowIndex = <?= Number(rowIndex || 0) ?>;
+            console.log('Injected data:', { BOOKING_NUMBER, ROW_INDEX });
             
-            console.log('Template variables:', { bookingNumber, rowIndex });
-            console.log('bookingNumber type:', typeof bookingNumber);
-            console.log('rowIndex type:', typeof rowIndex);
-            
-            if (bookingNumber && bookingNumber !== '' && bookingNumber !== 'undefined' && rowIndex && rowIndex !== '' && rowIndex !== 'undefined') {
+            if (BOOKING_NUMBER && ROW_INDEX) {
                 // Load arrest data from spreadsheet
                 document.getElementById('autoFillBadge').style.display = 'inline-flex';
-                loadArrestData(bookingNumber, rowIndex);
+                loadArrestData(BOOKING_NUMBER, ROW_INDEX);
             } else {
                 // No arrest data, start with blank form
                 addCharge();
